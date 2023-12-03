@@ -5,15 +5,45 @@
 
 class imagedata{
 public:
+    imagedata()
+    {
+       
+    }
     imagedata(cv::Mat &img)
     {
-        _img = img;
+        m_img = img;
+        m_height = img.rows;
+        m_width = img.cols;
         img2inputdata();
     }
-    cv::Mat _img;
-    std::vector<std::vector<double>> data;
+
+    void set(cv::Mat &img)
+    {
+        m_img = img;
+        m_height = img.rows;
+        m_width = img.cols;
+        img2inputdata();
+    }
+    
+    std::size_t height() {return m_height; }
+    std::size_t width() {return m_width; }
+    std::size_t size() {return m_data.size(); }
+
+    std::vector<double>  operator[] (std::size_t index) const
+    {
+        return m_data[index];
+    }
+    std::vector<double> & operator[] (std::size_t index)
+    {
+        return m_data[index];
+    }
 
 private:
+    cv::Mat m_img;
+    std::size_t m_height;
+	std::size_t m_width;
+    std::vector<std::vector<double>> m_data;
+
     void img2inputdata();
 }; 
 

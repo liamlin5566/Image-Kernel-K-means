@@ -7,22 +7,22 @@
 
 void imagedata::img2inputdata()
 {
-    int height = _img.rows;
-	int width = _img.cols;
+   
+    m_data.reserve(m_height * m_width);
 
-    for (size_t i=0; i < height; i++)
+    for (std::size_t i=0; i < m_height; i++)
     {
-        for (size_t j=0; j < width; j++)
+        for (std::size_t j=0; j < m_width; j++)
         {
-            size_t index = i * width + j;
+            //std::size_t index = i * width + j;
             std::vector<double> value(5);
-            value[0] = double(_img.at<cv::Vec3b>(i, j)[0]) / 255.0;
-            value[1] = double(_img.at<cv::Vec3b>(i, j)[1]) / 255.0;
-            value[2] = double(_img.at<cv::Vec3b>(i, j)[2]) / 255.0;
-            value[3] = double(i) / height;
-            value[4] = double(j) / width;
+            value[0] = double(m_img.at<cv::Vec3b>(i, j)[0]) / 255.0;
+            value[1] = double(m_img.at<cv::Vec3b>(i, j)[1]) / 255.0;
+            value[2] = double(m_img.at<cv::Vec3b>(i, j)[2]) / 255.0;
+            value[3] = double(i) / m_height;
+            value[4] = double(j) / m_width;
 
-            data.push_back(value);
+            m_data.push_back(value);
         }
     }
 } 

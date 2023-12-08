@@ -25,6 +25,7 @@ jobs:
   
     - name: make
       run: |
+        pkg-config --modversion opencv4
         sudo ln -s /usr/include/opencv4/opencv2 /usr/include/
         cd proj
         make

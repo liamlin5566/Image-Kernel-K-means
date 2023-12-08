@@ -1,44 +1,74 @@
-#include "include/imagedata.hpp"
-#include "include/kmeans.hpp"
 #include <iostream>
 #include <vector>
 #include <string>
+#include <exception>
 #include <opencv2/opencv.hpp>
 
 
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
-
+#include "include/imagedata.hpp"
+#include "include/kmeans.hpp"
 
 namespace py=pybind11;
 
 class pyKmeans{
     public:
 
-    pyKmeans(int k,  double gamma_c=0.6, double gamma_s=0.4, int max_iter=10, int nthreads=4):
-    m_cluster{k, gamma_c, gamma_s, max_iter, nthreads},
+    pyKmeans(int k,  double gamma_c=0.6, double gamma_s=0.4, int max_iter=10, double thresh=0.0001, int nthreads=4):
+    m_cluster{k, gamma_c, gamma_s, max_iter, thresh, nthreads},
     m_imgdata{}
     {
 
     }
 
-    void predict_and_savefig(std::string filename)
+    void predict(std::string filename)
     {
         set_data(filename);
         m_cluster.fit(m_imgdata);
-        m_cluster.save_fig(m_imgdata, "A.png");
     }
+
+    void predict(cv::Mat &img)
+    {
+        m_imgdata.set(img);
+        m_cluster.fit(m_imgdata);
+    }
+
+    void savefig(std::string filename)
+    {
+        if (m_cluster._alpha.size() == 0)
+            throw std::runtime_error("Have not do clustering, the size of result is zero\n");
+        m_cluster.save_fig(m_imgdata, filename);
+    }
+
+    py::array_t<int> get_results()
+    {
+        if (m_cluster._alpha.size() == 0)
+            throw std::runtime_error("Have not do clustering, the size of result is zero\n");
+
+        auto np_alpha = py::array_t<int>(m_cluster._alpha.size());
+        py::buffer_info buf = np_alpha.request();
+        int *ptr = static_cast<int *>(buf.ptr);
+        for(std::size_t i = 0; i < m_cluster._alpha.size(); i++){
+            ptr[i] = m_cluster._alpha[i];
+        }
+        return np_alpha;
+    }
+    
+    void set_verbose(bool verbose) {m_cluster.set_verbose(verbose); }
 
     int k_cluster() {return m_cluster.k_cluster();}
     double gamma_c() {return m_cluster.gamma_c();}
     double gamma_s() {return m_cluster.gamma_s();}
     int max_iter() {return m_cluster.max_iter();}
     int nthreads() {return m_cluster.nthreads();}
+    double thresh() {return m_cluster.thresh();}
 
     private:
-    imagedata m_imgdata;
     kmeans m_cluster;
+    imagedata m_imgdata;
+    
 
     void set_data(std::string filename)
     {
@@ -59,10 +89,16 @@ PYBIND11_MODULE(_kmeans, m)
         .def_property_readonly("gamma_s", &pyKmeans::gamma_s)
         .def_property_readonly("max_iter", &pyKmeans::max_iter)
         .def_property_readonly("nthreads", &pyKmeans::nthreads)
+        .def_property_readonly("thresh", &pyKmeans::thresh)
         .def(py::init<std::size_t>()) 
         .def(py::init<std::size_t, double, double>()) 
         .def(py::init<std::size_t, double, double, std::size_t>()) 
         .def(py::init<std::size_t, double, double, std::size_t, std::size_t>()) 
-        .def("predict_and_savefig", &pyKmeans::predict_and_savefig);
+        .def(py::init<std::size_t, double, double, std::size_t, double, std::size_t>()) 
+        .def("predict", static_cast<void (pyKmeans::*)(std::string filename)>(&pyKmeans::predict), "input filepath")
+        .def("predict", static_cast<void (pyKmeans::*)(cv::Mat &img)>(&pyKmeans::predict), "input cv Mat image ")
+        .def("savefig", &pyKmeans::savefig)
+        .def("get_results", &pyKmeans::get_results)
+        .def("set_verbose", &pyKmeans::set_verbose);
 
 }

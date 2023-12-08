@@ -21,4 +21,4 @@ test:
 	python3 -m pytest example.py -v
 
 clean:
-	rm -r -f build
+	rm -r -f build *.so

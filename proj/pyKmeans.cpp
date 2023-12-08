@@ -16,8 +16,8 @@ namespace py=pybind11;
 class pyKmeans{
     public:
 
-    pyKmeans(int k,  double gamma_c=0.6, double gamma_s=0.4):
-    m_cluster{k, gamma_c, gamma_s, 1, 6},
+    pyKmeans(int k,  double gamma_c=0.6, double gamma_s=0.4, int max_iter=10, int nthreads=4):
+    m_cluster{k, gamma_c, gamma_s, max_iter, nthreads},
     m_imgdata{}
     {
 
@@ -61,6 +61,8 @@ PYBIND11_MODULE(_kmeans, m)
         .def_property_readonly("nthreads", &pyKmeans::nthreads)
         .def(py::init<std::size_t>()) 
         .def(py::init<std::size_t, double, double>()) 
+        .def(py::init<std::size_t, double, double, std::size_t>()) 
+        .def(py::init<std::size_t, double, double, std::size_t, std::size_t>()) 
         .def("predict_and_savefig", &pyKmeans::predict_and_savefig);
 
 }

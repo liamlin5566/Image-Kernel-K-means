@@ -12,17 +12,17 @@ void kmeans::save_fig(imagedata& input, std::string outpath)
     int height = input.height();
 	int width = input.width();
 
-    std::cout << width << " " << height << std::endl;
+    //std::cout << width << " " << height << std::endl;
     cv::Mat output_fig = cv::Mat(height, width, CV_32FC3, 0.0);
 
-    std::cout << input.size() << std::endl;
+    //std::cout << input.size() << std::endl;
     int count = 0;
 
     for (int cls=0; cls < m_clusters; cls++)
     {
         std::vector<int> indices = get_spec_index(_alpha, cls);
         int M = indices.size();
-        
+        //std::cout << cls << " " << M << std::endl;
         double mean_value_b = 0.0;
         double mean_value_g = 0.0;
         double mean_value_r = 0.0;
@@ -43,7 +43,7 @@ void kmeans::save_fig(imagedata& input, std::string outpath)
         mean_value_b /= M;
         mean_value_g /= M;
         mean_value_r /= M;
-
+        //std::cout << cls << " "<< mean_value_b << mean_value_g << mean_value_r << std::endl;
         
         for (int i = 0; i < M; i++)
         {
@@ -62,10 +62,10 @@ void kmeans::save_fig(imagedata& input, std::string outpath)
         }
     }
     
-    std::cout << count << std::endl;
+    //std::cout << count << std::endl;
     //output_fig.convertTo(output_fig, CV_8U3C);
     cv::imwrite(outpath, output_fig);
-    std::cout << "finish" << std::endl;
+    //std::cout << "finish" << std::endl;
 
 }
 
@@ -73,20 +73,33 @@ void kmeans::init(imagedata& input)
 {
     int N = input.size();
 
-    int segment = N / m_clusters;
+    //int segment = N / m_clusters;
     _alpha = std::vector<int>(N, 0);
 
+    // for (int i=0; i < N; i++)
+    // {   
+    //     if (i / segment < m_clusters)
+    //         _alpha[i] = i / segment;
+    //     else
+    //         _alpha[i] = m_clusters - 1;
+    // }
+    srand(0);
     for (int i=0; i < N; i++)
     {   
-        if (i / segment < m_clusters)
-            _alpha[i] = i / segment;
-        else
-            _alpha[i] = m_clusters - 1;
+        _alpha[i] = rand() % m_clusters;
     }
 }
 
 void kmeans::fit(imagedata& input)
 {
+    // for (int i=0; i <input.size(); i++)
+    // {
+    //     for (int j = 0; j < input[i].size(); j++)
+    //     {
+    //         std::cout << input[i][j] << " ";
+    //     }
+    //     std::cout << std::endl;
+    // }
 
     init(input);
     save_fig(input, "init.png");
@@ -127,7 +140,7 @@ void kmeans::fit(imagedata& input)
         std::vector<int> cur_alpha = argmin_omp(dist_matrix, m_nthreads);
 
         double diff = check_change_omp(cur_alpha);
-        std::cout << diff  << std::endl;
+        std::cout << "diff" << diff  << std::endl;
         if (iter > 0 && diff < 0.001)
         {
             std::cout << "Early Stop" << std::endl;

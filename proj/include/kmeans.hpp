@@ -1,5 +1,6 @@
 #ifndef KMEANS_HPP
 #define KMEANS_HPP
+#include <cstdlib> 
 #include <vector>
 #include <iostream>
 #include <cmath> 
@@ -20,6 +21,7 @@ public:
     std::vector<int> _alpha;
 
     void fit(imagedata& input);
+    void fit_cuda(imagedata& input);
     void save_fig(imagedata& input, std::string outpath);
     void init(imagedata& input);
 

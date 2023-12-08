@@ -17,6 +17,8 @@ build/imagedata.o: src/imagedata.cpp include/imagedata.hpp
 	mkdir -p build
 	$(CXX) -c src/imagedata.cpp  -I./include -o build/imagedata.o
 
+test:
+	python3 -m pytest example.py -v
 
 clean:
 	rm -r -f build

@@ -29,8 +29,14 @@ class pyKmeans{
         m_cluster.fit(m_imgdata);
     }
 
-    void predict(cv::Mat &img)
+    void predict(py::array_t<unsigned char>& np_img)
     {
+        if (np_img.ndim() != 3)
+            throw std::runtime_error("The channel of input image must be 3\n");
+
+        py::buffer_info buf = np_img.request();
+
+        cv::Mat img(buf.shape[0], buf.shape[1], CV_8UC3, (unsigned char*) buf.ptr);
         m_imgdata.set(img);
         m_cluster.fit(m_imgdata);
     }
@@ -96,7 +102,7 @@ PYBIND11_MODULE(_kmeans, m)
         .def(py::init<std::size_t, double, double, std::size_t, std::size_t>()) 
         .def(py::init<std::size_t, double, double, std::size_t, double, std::size_t>()) 
         .def("predict", static_cast<void (pyKmeans::*)(std::string filename)>(&pyKmeans::predict), "input filepath")
-        .def("predict", static_cast<void (pyKmeans::*)(cv::Mat &img)>(&pyKmeans::predict), "input cv Mat image ")
+        .def("predict", static_cast<void (pyKmeans::*)(py::array_t<unsigned char>&)>(&pyKmeans::predict), "input cv Mat image ")
         .def("savefig", &pyKmeans::savefig)
         .def("get_results", &pyKmeans::get_results)
         .def("set_verbose", &pyKmeans::set_verbose);

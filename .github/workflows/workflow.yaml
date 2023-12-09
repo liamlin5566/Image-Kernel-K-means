@@ -32,5 +32,7 @@ jobs:
         make clean
         make
 
-    - name: make test
-      run: make test
+    - name: test
+      run: 
+        pwd
+        make test

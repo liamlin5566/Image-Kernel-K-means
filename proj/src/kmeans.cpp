@@ -94,7 +94,7 @@ void kmeans::fit(imagedata& input)
 {
     
     init(input);
-    save_fig(input, "init.png");
+    //save_fig(input, "init.png");
     int iter = 0;
     while (iter < m_max_iter)
     {

@@ -1,10 +1,33 @@
 import _kmeans
-c = _kmeans.kmeans(3)
+import numpy as np
+import pytest
+import cv2
 
-print(c.k_cluster)
-print(c.gamma_c)
-print(c.gamma_s)
-print(c.max_iter)
-print(c.nthreads)
+def cluster():
+    k = 3
+    gamma_c=0.6
+    gamma_s=0.4
+    max_iter=20
+    thresh=0.001
+    nthreads=4
 
-c.predict_and_savefig("./image1.png")
+    c = _kmeans.kmeans(k, gamma_c, gamma_s, max_iter, thresh, nthreads)
+    c.set_verbose(True)
+
+    assert c.k_cluster == k
+    assert c.gamma_c == gamma_c
+    assert c.gamma_s == gamma_s
+    assert c.max_iter == max_iter
+    assert c.nthreads == nthreads
+    assert c.thresh == thresh
+
+    
+
+    print("------------------Do Cluster-----------------")
+    c.predict("./image1.png")
+    c.savefig("image1_result.png")
+
+
+
+if __name__ == "__main__":
+    cluster()

@@ -1,5 +1,3 @@
-__pycache__/
-build/
-other_result/
-*.so
-
+proj/__pycache__/
+proj/build/
+proj/*.so

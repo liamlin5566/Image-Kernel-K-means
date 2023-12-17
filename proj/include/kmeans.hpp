@@ -6,6 +6,13 @@
 #include <cmath> 
 #include <omp.h>
 #include <stdexcept>
+
+#ifdef WCUDA
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include "kernelfunc.h"
+#endif
+
 #include "imagedata.hpp"
 
 class kmeans{
@@ -24,7 +31,11 @@ public:
     std::vector<int> _alpha;
 
     void fit(imagedata& input);
+
+#ifdef WCUDA
     void fit_cuda(imagedata& input);
+#endif
+
     void save_fig(imagedata& input, std::string outpath);
     void init(imagedata& input);
 

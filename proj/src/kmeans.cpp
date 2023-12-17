@@ -3,9 +3,15 @@
 #include <string>
 #include <opencv2/opencv.hpp>
 #include <stdexcept>
+#ifdef WCUDA
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include "kernelfunc.h"
+#endif
+
 #include "kmeans.hpp"
 
-using namespace std;
+
 
 
 void kmeans::save_fig(imagedata& input, std::string outpath)
@@ -202,6 +208,8 @@ std::vector<std::vector<double>> kmeans::calculate_dist_k_omp(imagedata& input) 
             mean_square += sum;
         }
         mean_square = mean_square / (M*M);
+
+        //std::cout << cls << " " << mean_square<<" " << M <<  std::endl;
         
         #pragma omp parallel num_threads(m_nthreads)
         {
@@ -289,3 +297,128 @@ std::vector<int> argmin_omp(std::vector<std::vector<double>> &vec, int nthreads)
     return min_indices;
 }
 
+
+
+#ifdef WCUDA
+void kmeans::fit_cuda(imagedata& input)
+{
+    init(input);
+    save_fig(input, "init.png");
+
+    
+    int N = input.size();
+    double * host_dist_matrix = (double *)malloc(N * m_clusters * sizeof(double));
+    double * host_input_data = (double *)malloc(N * 5 * sizeof(double));
+    int * host_alpha = (int *)malloc(N * sizeof(int));
+
+    // initialize;
+    for (int i = 0; i < N * m_clusters; i++)
+    {
+        host_dist_matrix[i] = 0.0;
+    }
+
+    for (int i = 0; i < N; i++)
+    {
+        host_input_data[i*5+0] = input[i][0];
+        host_input_data[i*5+1] = input[i][1];
+        host_input_data[i*5+2] = input[i][2];
+        host_input_data[i*5+3] = input[i][3];
+        host_input_data[i*5+4] = input[i][4];
+    }
+
+    // Allocation cuda mem and copy from host
+    double *device_dist_matrix;
+    double *device_input_data;
+    int *device_alpha;
+
+    cudaMalloc(&device_dist_matrix, N * m_clusters * sizeof(double));
+    cudaMalloc(&device_input_data, N * 5 * sizeof(double));
+    cudaMalloc(&device_alpha, N * sizeof(int));
+
+    cudaMemcpy(device_dist_matrix, host_dist_matrix, N * m_clusters * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_input_data, host_input_data, N * 5 * sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_alpha, _alpha.data(), N * sizeof(int), cudaMemcpyHostToDevice); // copy the alpha from vector
+    dim3 blockSize(32);
+    dim3 numBlock((N + 32-1)/ 32);
+
+    int iter = 0;
+    while (iter < m_max_iter)
+    {   
+        
+        for (int cls=0; cls < m_clusters; cls++)
+        {
+
+            double mean_square = 0.0;
+            double M = 0.0;
+            #pragma omp parallel num_threads(m_nthreads)
+            {
+                double thread_sum = 0.0, thread_M = 0.0;
+                int id, nthrds;
+                id = omp_get_thread_num(); 
+                nthrds= omp_get_num_threads(); 
+                for (int i = id; i < N; i = i + nthrds)
+                {
+                    if (_alpha[i] == cls) // choose the data belonging to cls
+                    {
+                        for (int j = 0; j < N; j++) //symmetric matrix can faster
+                        {
+                            if (_alpha[j] == cls) // choose the data belonging to cls
+                            {       
+                                thread_sum += calculate_dist(input[i], input[j]);
+                            } 
+                        }
+                        thread_M += 1;
+                    }   
+                }
+                #pragma omp critical
+                {
+                    mean_square += thread_sum; 
+                    M += thread_M;
+                }    
+            }
+
+            mean_square = mean_square / (M*M);
+            //std::cout << cls << " " << mean_square<< std::endl;
+
+            if (M > 0)
+            {
+                calculate_dist_k_cuda<<<numBlock, blockSize>>>(device_input_data, device_alpha, device_dist_matrix, mean_square, N, m_clusters, 
+                                                             m_gamma_c, m_gamma_s, cls);
+            }
+                
+        }
+        cudaDeviceSynchronize();
+        argmin_cuda<<<numBlock, blockSize>>>(device_dist_matrix, device_alpha, N, m_clusters);
+
+        //Check the different
+        cudaDeviceSynchronize();
+        cudaMemcpy(host_alpha, device_alpha, N * sizeof(int), cudaMemcpyDeviceToHost);
+        
+        std::vector<int> cur_alpha = std::vector<int>(host_alpha, host_alpha+N);  
+        double diff = check_change_omp(cur_alpha);  
+        if (m_verbose)
+            std::cout << "iter: " << iter << ", diff: " << diff << std::endl;
+        if (iter > 0 && diff < m_thresh)
+        {   
+            if (m_verbose)
+                std::cout << "Early Stop" << std::endl;
+            break;
+        }
+
+        _alpha = cur_alpha;
+        iter++;
+    }
+
+    
+    free(host_dist_matrix);
+    free(host_input_data);
+    free(host_alpha);
+
+    cudaFree(device_alpha);
+    cudaFree(device_dist_matrix);
+    cudaFree(device_input_data);
+
+    if (m_verbose)
+        std::cout << "finish clustering" << std::endl;
+}
+#endif

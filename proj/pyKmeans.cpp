@@ -11,8 +11,10 @@
 #include "include/imagedata.hpp"
 #include "include/kmeans.hpp"
 
-namespace py=pybind11;
+namespace pybind11
+{
 
+namespace py=pybind11;
 class pyKmeans{
     public:
 
@@ -26,7 +28,13 @@ class pyKmeans{
     void predict(std::string filename)
     {
         set_data(filename);
-        m_cluster.fit(m_imgdata);
+        #ifndef WCUDA
+            //std::cout << "use" << std::endl;
+            m_cluster.fit(m_imgdata);
+        #else
+            std::cout << "use cuda" << std::endl;
+            m_cluster.fit_cuda(m_imgdata);
+        #endif
     }
 
     void predict(py::array_t<unsigned char>& np_img)
@@ -38,7 +46,13 @@ class pyKmeans{
 
         cv::Mat img(buf.shape[0], buf.shape[1], CV_8UC3, (unsigned char*) buf.ptr);
         m_imgdata.set(img);
-        m_cluster.fit(m_imgdata);
+        #ifndef WCUDA
+            //std::cout << "use" << std::endl;
+            m_cluster.fit(m_imgdata);
+        #else
+            std::cout << "use cuda" << std::endl;
+            m_cluster.fit_cuda(m_imgdata);
+        #endif
     }
 
     void savefig(std::string filename)
@@ -84,11 +98,14 @@ class pyKmeans{
 
 };
 
+}/*end namespace pybind11*/
+
 
 PYBIND11_MODULE(_kmeans, m) 
 {
     m.doc() = "K-means on image";
 
+    using namespace pybind11;
     py::class_<pyKmeans>(m, "kmeans")
         .def_property_readonly("k_cluster", &pyKmeans::k_cluster)
         .def_property_readonly("gamma_c", &pyKmeans::gamma_c)

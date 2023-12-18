@@ -28,7 +28,7 @@ where $x$ represent data point which consists of pixel value (rgb) and posistion
 ```
 make all
 ```
-**With cuda**
+**With cuda (optional)**
 ```
 make wcuda=true
 ```
@@ -39,6 +39,12 @@ make test # pytest
 python example.py
 ```
 
-![input image](./proj/image1.png "input image")
+input image:
+<p align="center">
+  <img src="./proj/image1.png" />
+</p>
 
-![result](./proj/result/image1_result.png "kmeans result")
+result image:
+<p align="center">
+  <img src="./proj/result/image1_result.png" />
+</p>

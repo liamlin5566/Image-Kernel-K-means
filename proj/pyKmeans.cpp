@@ -32,7 +32,7 @@ class pyKmeans{
             //std::cout << "use" << std::endl;
             m_cluster.fit(m_imgdata);
         #else
-            std::cout << "use cuda" << std::endl;
+            //std::cout << "use cuda" << std::endl;
             m_cluster.fit_cuda(m_imgdata);
         #endif
     }
@@ -50,7 +50,7 @@ class pyKmeans{
             //std::cout << "use" << std::endl;
             m_cluster.fit(m_imgdata);
         #else
-            std::cout << "use cuda" << std::endl;
+            //std::cout << "use cuda" << std::endl;
             m_cluster.fit_cuda(m_imgdata);
         #endif
     }

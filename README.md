@@ -48,3 +48,14 @@ result image:
 <p align="center">
   <img src="./proj/result/image1_result.png" />
 </p>
+
+
+#### Time
+Test 5 times on image1.png
+
+| mode         |  Avg. Time      | 
+| -------------| --------------- | 
+| cpu (1)      |  21.85 (sec)    |
+| cpu (2)      | 12.81  (sec)    |
+| cpu (4)      | 6.98  (sec)     |
+| gpu          |17.72 (sec)      |

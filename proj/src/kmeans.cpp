@@ -3,7 +3,7 @@
 #include <string>
 #include <opencv2/opencv.hpp>
 #include <stdexcept>
-#ifdef WCUDA
+#ifdef __NVCC__
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include "kernelfunc.h"
@@ -11,10 +11,11 @@
 
 #include "kmeans.hpp"
 
+template class kmeans<float>;
+template class kmeans<double>;
 
-
-
-void kmeans::save_fig(imagedata& input, std::string outpath)
+template<typename DType>
+void kmeans<DType>::save_fig(imagedata<DType>& input, std::string outpath)
 {   
     int height = input.height();
 	int width = input.width();
@@ -25,19 +26,20 @@ void kmeans::save_fig(imagedata& input, std::string outpath)
 
     for (int cls=0; cls < m_clusters; cls++)
     {
-        std::vector<int> indices = get_spec_index(_alpha, cls);
+        std::vector<int> indices = get_spec_index(alpha, cls);
         int M = indices.size();
         //std::cout << cls << " " << M << std::endl;
-        double mean_value_b = 0.0;
-        double mean_value_g = 0.0;
-        double mean_value_r = 0.0;
+        DType mean_value_b = 0.0;
+        DType mean_value_g = 0.0;
+        DType mean_value_r = 0.0;
 
+        // Choose average rgb value to represent clustering center
         for (int i = 0; i < M; i++)
         {
             int idx = indices[i];
-            double b = input[idx][0];
-            double g = input[idx][1]; 
-            double r = input[idx][2];  
+            DType b = input[idx][0];
+            DType g = input[idx][1]; 
+            DType r = input[idx][2];  
 
             mean_value_b += b;
             mean_value_g += g;
@@ -48,19 +50,18 @@ void kmeans::save_fig(imagedata& input, std::string outpath)
         mean_value_b /= M;
         mean_value_g /= M;
         mean_value_r /= M;
-        //std::cout << cls << " "<< mean_value_b << mean_value_g << mean_value_r << std::endl;
         
+        // Write segmented result to output image
         for (int i = 0; i < M; i++)
         {
             int idx = indices[i];
            
-            double y = input[idx][3];  
-            double x = input[idx][4];  
+            DType y = input[idx][3];  
+            DType x = input[idx][4];  
 
             int img_y = int(y * height + 0.5);
             int img_x = int(x * width + 0.5 );
 
-            //std::cout << img_y << " " << img_x << std::endl; 
             output_fig.at<cv::Vec3f>(img_y, img_x)[0] = float(mean_value_b) * 255;
             output_fig.at<cv::Vec3f>(img_y, img_x)[1] = float(mean_value_g) * 255;
             output_fig.at<cv::Vec3f>(img_y, img_x)[2] = float(mean_value_r) * 255;
@@ -70,46 +71,44 @@ void kmeans::save_fig(imagedata& input, std::string outpath)
     //std::cout << count << std::endl;
     //output_fig.convertTo(output_fig, CV_8U3C);
     cv::imwrite(outpath, output_fig);
-    //std::cout << "finish" << std::endl;
-
 }
 
-void kmeans::init(imagedata& input)
+template<typename DType>
+void kmeans<DType>::init(imagedata<DType>& input)
 {
     int N = input.size();
+    alpha = std::vector<int>(N, 0);
 
-    
-    _alpha = std::vector<int>(N, 0);
-
-    // int segment = N / m_clusters;
-    // for (int i=0; i < N; i++)
-    // {   
-    //     if (i / segment < m_clusters)
-    //         _alpha[i] = i / segment;
-    //     else
-    //         _alpha[i] = m_clusters - 1;
-    // }
+    // random initialize
     srand(0);
     for (int i=0; i < N; i++)
     {   
-        _alpha[i] = rand() % m_clusters;
+        alpha[i] = rand() % m_clusters;
     }
 }
 
-void kmeans::fit(imagedata& input)
+/*
+The function do clustering
+input: Nx5 array
+output: clustering assignment
+*/
+template<typename DType>
+void kmeans<DType>::fit(imagedata<DType>& input)
 {
     
-    init(input);
+    init(input); // initialize
     //save_fig(input, "init.png");
     int iter = 0;
     while (iter < m_max_iter)
     {
+        // For each pixe,  calculate the distance between pixel and centers
+        std::vector<std::vector<DType>> dist_matrix;
+        dist_matrix = calculate_dist_k_omp(input); // dist_matrix: Nxk
 
-        std::vector<std::vector<double>> dist_matrix;
-        dist_matrix = calculate_dist_k_omp(input);
-        std::vector<int> cur_alpha = argmin_omp(dist_matrix, m_nthreads);
-
-        double diff = check_change_omp(cur_alpha);
+        // Choose the assignment (alpha) which minimize the cost
+        std::vector<int> cur_alpha = argmin_omp<DType>(dist_matrix, m_nthreads);
+        // calculate the difference of current assignment and previous assignment
+        DType diff = calculate_change_omp(cur_alpha);
 
         if (m_verbose)
             std::cout << "iter: " << iter << ", diff: " << diff << std::endl;
@@ -120,7 +119,7 @@ void kmeans::fit(imagedata& input)
             break;
         }
 
-        _alpha = cur_alpha;
+        alpha = cur_alpha;
         iter++;
     }
 
@@ -129,27 +128,26 @@ void kmeans::fit(imagedata& input)
 }
 
 
-double kmeans::check_change_omp(std::vector<int>&  cur_alpha)
+template<typename DType>
+DType kmeans<DType>::calculate_change_omp(std::vector<int>&  cur_alpha)
 {
-    double diff = 0.0;
-
-    int N = _alpha.size();
-    //int NUM_THREADS = 4;
+    DType diff = 0.0;
+    int N = alpha.size();
     #pragma omp parallel num_threads(m_nthreads)
     {
         int i, id, nthrds;
         id = omp_get_thread_num(); 
         nthrds= omp_get_num_threads(); 
 
-        double sum = 0.0;
+        DType sum = 0.0;
         for (i = id; i < N; i = i + nthrds)
         {
-            if (_alpha[i] != cur_alpha[i])
+            if (alpha[i] != cur_alpha[i])
             {
                 sum += 1.0;
             }
         }
-
+        // sum up the result from all threads (critical section)
         #pragma omp critical
         diff += sum;
     }
@@ -160,37 +158,44 @@ double kmeans::check_change_omp(std::vector<int>&  cur_alpha)
 }
 
 
-double kmeans::calculate_dist(std::vector<double>& vec_i, std::vector<double>& vec_j)
+template<typename DType>
+DType kmeans<DType>::calculate_dist(std::vector<DType>& vec_i, std::vector<DType>& vec_j)
 {
-    double spatial_dist = pow(vec_i[3] - vec_j[3], 2) + pow(vec_i[4] - vec_j[4], 2);      
-    double color_dist = pow(vec_i[0] - vec_j[0], 2) + pow(vec_i[1] - vec_j[1], 2) + pow(vec_i[2] - vec_j[2], 2);
+    // gaussian kernel function
+    DType spatial_dist = pow(vec_i[3] - vec_j[3], 2) + pow(vec_i[4] - vec_j[4], 2);      
+    DType color_dist = pow(vec_i[0] - vec_j[0], 2) + pow(vec_i[1] - vec_j[1], 2) + pow(vec_i[2] - vec_j[2], 2);
     spatial_dist = exp(- m_gamma_s * spatial_dist);
     color_dist =  exp(- m_gamma_c * color_dist);
     return spatial_dist * color_dist;
 }
 
 
-std::vector<std::vector<double>> kmeans::calculate_dist_k_omp(imagedata& input) // Nxk
+/*
+In this function, I calculate the distance to k cluster centers for each pixel
+Input: Nx5 array
+Output: Nxk array
+*/
+template<typename DType>
+std::vector<std::vector<DType>> kmeans<DType>::calculate_dist_k_omp(imagedata<DType>& input) 
 {   
     int N = input.size();
     
-    std::vector<std::vector<double>> dist(N, std::vector<double>(m_clusters, 0));
+    std::vector<std::vector<DType>> dist(N, std::vector<DType>(m_clusters, 0));
 
     for (int cls=0; cls < m_clusters; cls++)
-    {
-        std::vector<int> indices = get_spec_index(_alpha, cls);
-        
+    {   
+        // First choose the data/pixels belonging to cls
+        std::vector<int> indices = get_spec_index(alpha, cls);
         if (indices.size() == 0)   {
             continue;
         }
         int M = indices.size();
         
-        double mean_square = 0.0; //calculate_square(gram_matrix, indices);
-        // calculate squares mean
-        //int NUM_THREADS = 4;
+        // Then calculate the square of centers (pre-compute)
+        DType mean_square = 0.0; 
         #pragma omp parallel num_threads(m_nthreads)
         {
-            double sum = 0.0;
+            DType sum = 0.0;
             int id, nthrds;
             id = omp_get_thread_num(); 
             nthrds= omp_get_num_threads(); 
@@ -200,17 +205,19 @@ std::vector<std::vector<double>> kmeans::calculate_dist_k_omp(imagedata& input) 
                 for (int j = 0; j < M; j++) //symmetric matrix can faster
                 {
                     int idx_j = indices[j];
-                    sum += calculate_dist(input[idx_i], input[idx_j]);//gram_matrix[idx_i][idx_j]; 
+                    sum += calculate_dist(input[idx_i], input[idx_j]);
                 }
             }
 
+            // critical section (sum up the results from all threads)
             #pragma omp critical
             mean_square += sum;
         }
         mean_square = mean_square / (M*M);
-
         //std::cout << cls << " " << mean_square<<" " << M <<  std::endl;
         
+        // For each pixe, calculate the distance between pixel and center
+        // using kernel trick to get distance (differnet from traditional K-means due to non-linear mapping)
         #pragma omp parallel num_threads(m_nthreads)
         {
             int i, id, nthrds;
@@ -219,10 +226,10 @@ std::vector<std::vector<double>> kmeans::calculate_dist_k_omp(imagedata& input) 
 
             for (i = id; i < N; i = i + nthrds)
             {
-                double sum_i = 0.0;
-                double dist_i_j = 0.0;
+                DType sum_i = 0.0;
+                DType dist_i_j = 0.0;
 
-                double diag = calculate_dist(input[i], input[i]);
+                DType diag = calculate_dist(input[i], input[i]);
                 for (int j = 0; j < M ; j++) //symmetric matrix can faster
                 {
                     int idx_j = indices[j];
@@ -244,6 +251,38 @@ std::vector<std::vector<double>> kmeans::calculate_dist_k_omp(imagedata& input) 
 }
 
 
+template<typename DType>
+std::vector<int> argmin_omp(std::vector<std::vector<DType>> &vec, int nthreads) // Nxk. change to template, pp
+{
+    int N = vec.size();
+    int K = vec[0].size();
+
+    std::vector<int> min_indices(N, 0);
+
+    #pragma omp parallel num_threads(nthreads)
+    {
+        int i, id, nthrds;
+        id = omp_get_thread_num(); 
+        nthrds= omp_get_num_threads(); 
+
+        for (i = id; i < N; i = i + nthrds)
+        {
+            DType min_value = vec[i][0];
+            int min_idx = 0;
+            for (int j = 1; j <K; j++)
+            {
+                if (vec[i][j] < min_value)
+                {
+                    min_value = vec[i][j];
+                    min_idx = j;
+                }
+            }
+            min_indices[i] = min_idx;
+        }
+    }
+
+    return min_indices;
+}
 
 
 std::vector<int> get_spec_index(std::vector<int> &vec, int cls)
@@ -262,56 +301,18 @@ std::vector<int> get_spec_index(std::vector<int> &vec, int cls)
     return indices;
 }
 
-
-std::vector<int> argmin_omp(std::vector<std::vector<double>> &vec, int nthreads) // Nxk. change to template, pp
-{
-    int N = vec.size();
-    int K = vec[0].size();
-
-    std::vector<int> min_indices(N, 0);
-
-
-   // int NUM_THREADS = 4;
-    #pragma omp parallel num_threads(nthreads)
-    {
-        int i, id, nthrds;
-        id = omp_get_thread_num(); 
-        nthrds= omp_get_num_threads(); 
-
-        for (i = id; i < N; i = i + nthrds)
-        {
-            double min_value = vec[i][0];
-            int min_idx = 0;
-            for (int j = 1; j <K; j++)
-            {
-                if (vec[i][j] < min_value)
-                {
-                    min_value = vec[i][j];
-                    min_idx = j;
-                }
-            }
-            min_indices[i] = min_idx;
-        }
-    }
-
-    return min_indices;
-}
-
-
-
-#ifdef WCUDA
-void kmeans::fit_cuda(imagedata& input)
+#ifdef __NVCC__
+template<typename DType>
+void kmeans<DType>::fit_cuda(imagedata<DType>& input)
 {
     init(input);
-    save_fig(input, "init.png");
-
     
+    // Prepare data
     int N = input.size();
-    double * host_dist_matrix = (double *)malloc(N * m_clusters * sizeof(double));
-    double * host_input_data = (double *)malloc(N * 5 * sizeof(double));
+    DType * host_dist_matrix = (DType *)malloc(N * m_clusters * sizeof(DType));
+    DType * host_input_data = (DType *)malloc(N * 5 * sizeof(DType));
     int * host_alpha = (int *)malloc(N * sizeof(int));
 
-    // initialize;
     for (int i = 0; i < N * m_clusters; i++)
     {
         host_dist_matrix[i] = 0.0;
@@ -327,17 +328,17 @@ void kmeans::fit_cuda(imagedata& input)
     }
 
     // Allocation cuda mem and copy from host
-    double *device_dist_matrix;
-    double *device_input_data;
+    DType *device_dist_matrix;
+    DType *device_input_data;
     int *device_alpha;
 
-    cudaMalloc(&device_dist_matrix, N * m_clusters * sizeof(double));
-    cudaMalloc(&device_input_data, N * 5 * sizeof(double));
+    cudaMalloc(&device_dist_matrix, N * m_clusters * sizeof(DType));
+    cudaMalloc(&device_input_data, N * 5 * sizeof(DType));
     cudaMalloc(&device_alpha, N * sizeof(int));
 
-    cudaMemcpy(device_dist_matrix, host_dist_matrix, N * m_clusters * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_input_data, host_input_data, N * 5 * sizeof(double), cudaMemcpyHostToDevice);
-    cudaMemcpy(device_alpha, _alpha.data(), N * sizeof(int), cudaMemcpyHostToDevice); // copy the alpha from vector
+    cudaMemcpy(device_dist_matrix, host_dist_matrix, N * m_clusters * sizeof(DType), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_input_data, host_input_data, N * 5 * sizeof(DType), cudaMemcpyHostToDevice);
+    cudaMemcpy(device_alpha, alpha.data(), N * sizeof(int), cudaMemcpyHostToDevice); // copy the alpha from vector
     dim3 blockSize(32);
     dim3 numBlock((N + 32-1)/ 32);
 
@@ -348,21 +349,22 @@ void kmeans::fit_cuda(imagedata& input)
         for (int cls=0; cls < m_clusters; cls++)
         {
 
-            double mean_square = 0.0;
-            double M = 0.0;
+            // First calculate the square of centers (pre-compute)
+            DType mean_square = 0.0;
+            DType M = 0.0;
             #pragma omp parallel num_threads(m_nthreads)
             {
-                double thread_sum = 0.0, thread_M = 0.0;
+                DType thread_sum = 0.0, thread_M = 0.0;
                 int id, nthrds;
                 id = omp_get_thread_num(); 
                 nthrds= omp_get_num_threads(); 
                 for (int i = id; i < N; i = i + nthrds)
                 {
-                    if (_alpha[i] == cls) // choose the data belonging to cls
+                    if (alpha[i] == cls) // choose the data belonging to cls
                     {
-                        for (int j = 0; j < N; j++) //symmetric matrix can faster
+                        for (int j = 0; j < N; j++) 
                         {
-                            if (_alpha[j] == cls) // choose the data belonging to cls
+                            if (alpha[j] == cls) // choose the data belonging to cls
                             {       
                                 thread_sum += calculate_dist(input[i], input[j]);
                             } 
@@ -370,32 +372,33 @@ void kmeans::fit_cuda(imagedata& input)
                         thread_M += 1;
                     }   
                 }
+
+                // sum up the result from all threads (critical section)
                 #pragma omp critical
                 {
                     mean_square += thread_sum; 
                     M += thread_M;
                 }    
             }
-
             mean_square = mean_square / (M*M);
-            //std::cout << cls << " " << mean_square<< std::endl;
-
+           
+            // For each pixe,  calculate the distance between pixel and one specific (=cls) center
             if (M > 0)
             {
-                calculate_dist_k_cuda<<<numBlock, blockSize>>>(device_input_data, device_alpha, device_dist_matrix, mean_square, N, m_clusters, 
+                calculate_dist_single_center_cuda<DType><<<numBlock, blockSize>>>(device_input_data, device_alpha, device_dist_matrix, mean_square, N, m_clusters, 
                                                              m_gamma_c, m_gamma_s, cls);
             }
                 
         }
         cudaDeviceSynchronize();
-        argmin_cuda<<<numBlock, blockSize>>>(device_dist_matrix, device_alpha, N, m_clusters);
-
-        //Check the different
+        // Choose the assignment (alpha) which minimize the cost
+        argmin_cuda<DType><<<numBlock, blockSize>>>(device_dist_matrix, device_alpha, N, m_clusters);
         cudaDeviceSynchronize();
         cudaMemcpy(host_alpha, device_alpha, N * sizeof(int), cudaMemcpyDeviceToHost);
         
+        // calculate the difference of current assignment and previous assignment
         std::vector<int> cur_alpha = std::vector<int>(host_alpha, host_alpha+N);  
-        double diff = check_change_omp(cur_alpha);  
+        DType diff = calculate_change_omp(cur_alpha);  
         if (m_verbose)
             std::cout << "iter: " << iter << ", diff: " << diff << std::endl;
         if (iter > 0 && diff < m_thresh)
@@ -405,11 +408,11 @@ void kmeans::fit_cuda(imagedata& input)
             break;
         }
 
-        _alpha = cur_alpha;
+        alpha = cur_alpha;
         iter++;
     }
 
-    
+    // Release Memory
     free(host_dist_matrix);
     free(host_input_data);
     free(host_alpha);

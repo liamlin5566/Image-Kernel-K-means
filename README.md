@@ -43,10 +43,18 @@ input image:
 <p align="center">
   <img src="./proj/image1.png" />
 </p>
+<p align="center">
+  <img src="./proj/Dio1.png" />
+</p>
+
 
 result image:
 <p align="center">
   <img src="./proj/result/image1_result.png" />
+</p>
+
+<p align="center">
+  <img src="./proj/result/Dio_result.png" />
 </p>
 
 
@@ -55,7 +63,7 @@ Test 5 times on image1.png
 
 | mode         |  Avg. Time      | 
 | -------------| --------------- | 
-| cpu (1)      |  21.85 (sec)    |
-| cpu (2)      | 12.81  (sec)    |
-| cpu (4)      | 6.98  (sec)     |
-| gpu          |17.72 (sec)      |
+| cpu (1)      | 21.85 (sec)    |
+| cpu (2)      | 11.39  (sec)    |
+| cpu (4)      | 6.51  (sec)     |
+| gpu          | 6.32 (sec)      |

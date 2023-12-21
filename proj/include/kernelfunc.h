@@ -4,10 +4,17 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
-__global__ void calculate_dist_k_cuda(const double *input, const int* alpha, double*dist_matrix, double mean_square, int N, int K, 
-                                        double gamma_c, double gamma_s, int cls); // input_data: N*5, dist_matrix: N
-__global__ void argmin_cuda(const double*dist_matrix, int *alpha, int N, int k);
-__device__ double calculate_dist_cuda(const double * vec_i, const double * vec_j, const double gamma_c, const double gamma_s);
+// For each pixe,  calculate the distance between pixel and one specific (=cls) center
+template<typename DType>
+__global__ void calculate_dist_single_center_cuda(const DType *input, const int* alpha, DType*dist_matrix, const DType mean_square, int N, int K, 
+                                        const DType gamma_c, const DType gamma_s, int cls);
+//argmin along 1 axis
+template<typename DType>
+__global__ void argmin_cuda(const DType*dist_matrix, int *alpha, int N, int k);
 
+
+// calculate the distance (kernel function)
+template<typename DType>
+__device__ DType calculate_dist_cuda(const DType * vec_i, const DType * vec_j, const DType gamma_c, const DType gamma_s);
 
 #endif

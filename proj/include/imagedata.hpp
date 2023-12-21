@@ -3,7 +3,7 @@
 #include <opencv2/opencv.hpp>
 #include <vector>
 
-template<typename T>
+template<typename DType>
 class imagedata{
 public:
     imagedata()
@@ -30,11 +30,11 @@ public:
     std::size_t width() {return m_width; }
     std::size_t size() {return m_data.size(); }
 
-    std::vector<T>  operator[] (std::size_t index) const
+    std::vector<DType>  operator[] (std::size_t index) const
     {
         return m_data[index];
     }
-    std::vector<T> & operator[] (std::size_t index)
+    std::vector<DType> & operator[] (std::size_t index)
     {
         return m_data[index];
     }
@@ -43,7 +43,7 @@ private:
     cv::Mat m_img;
     std::size_t m_height;
 	std::size_t m_width;
-    std::vector<std::vector<T>> m_data;
+    std::vector<std::vector<DType>> m_data;
 
     void img2inputdata();
 }; 

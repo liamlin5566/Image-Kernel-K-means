@@ -66,7 +66,7 @@ def test_unit():
     #print(result)
     output = trans2image(result, img, k)
     #print((output - img).sum())
-    assert (output - img).sum() == 0.0
+    assert (np.abs(output - img)).sum() == 0.0
 
 
 if __name__ == "__main__":

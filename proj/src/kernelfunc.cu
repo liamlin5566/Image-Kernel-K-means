@@ -2,22 +2,39 @@
 #include <cuda_runtime.h>
 #include "kernelfunc.h"
 
-__global__ void calculate_dist_k_cuda(const double *input, const int* alpha, double*dist_matrix, double mean_square, int N, int K, 
-                                        double gamma_c, double gamma_s, int cls) // input_data: N*5, dist_matrix: N
+template __global__ void argmin_cuda<float>(const float*dist_matrix, int *alpha, int N, int k);
+template __global__ void calculate_dist_single_center_cuda<float>(const float *input, const int* alpha, float*dist_matrix, const float mean_square, int N, int K, 
+                                        const float gamma_c, const float gamma_s, int cls);
+
+template __global__ void argmin_cuda<double>(const double*dist_matrix, int *alpha, int N, int k);
+template __global__ void calculate_dist_single_center_cuda<double>(const  double *input, const int* alpha, double*dist_matrix, const  double mean_square, int N, int K, 
+                                        const  double gamma_c, const  double gamma_s, int cls);
+
+/*
+In this, calculate the distance between pixel and one specific (=cls) center for each pixel
+use kernel trick due to non-linear mapping
+input: Nx5 -> (N*5,) 1D array
+dist_matrix: NxK -> (N*K, ) 1D array
+*/
+template<typename DType>
+__global__ void calculate_dist_single_center_cuda(const DType *input, const int* alpha, DType*dist_matrix, const DType mean_square, int N, int K, 
+                                        const DType gamma_c, const DType gamma_s, int cls) 
 {
-    int threadID = blockIdx.x * blockDim.x + threadIdx.x;
+    int threadID = blockIdx.x * blockDim.x + threadIdx.x; // get x_i's index
     if (threadID < N)
     {
-        
-        double diag = calculate_dist_cuda(&input[threadID*5], &input[threadID*5], gamma_c, gamma_s); //spatial_dist * color_dist;
-        double sum_i = 0.0;
-        double dist_i_j = 0.0;
-        double M = 0;
+        // x_i ^2
+        DType diag = calculate_dist_cuda<DType>(&input[threadID*5], &input[threadID*5], gamma_c, gamma_s); //spatial_dist * color_dist;
+        DType sum_i = 0.0;
+        DType dist_i_j = 0.0;
+        DType M = 0;
+
+        //calculate the similarity between x_i and X_j, where X_j is the pixel set belonging to cls
         for (int j = 0; j < N; j++)
         {
             if (alpha[j] == cls) // choose the data belonging to cls
             {
-                sum_i += calculate_dist_cuda(&input[threadID*5], &input[j*5], gamma_c, gamma_s);
+                sum_i += calculate_dist_cuda<DType>(&input[threadID*5], &input[j*5], gamma_c, gamma_s);
                 M += 1;
             }
         }
@@ -25,17 +42,18 @@ __global__ void calculate_dist_k_cuda(const double *input, const int* alpha, dou
         if (M > 0)
         {
             dist_i_j = sum_i * 2 / M; 
-            dist_matrix[threadID*K+cls] = diag - dist_i_j + mean_square;
+            dist_matrix[threadID*K+cls] = diag - dist_i_j + mean_square; // dist[i][cls] = diag - dist_i_j + mean_square;
         }
     }   
 }
 
-__global__ void argmin_cuda(const double*dist_matrix, int *alpha, int N, int k)
+template<typename DType>
+__global__ void argmin_cuda(const DType*dist_matrix, int *alpha, int N, int k)
 {
     
     int threadID = blockIdx.x * blockDim.x + threadIdx.x;
     
-    double min_value = dist_matrix[threadID * k + 0];
+    DType min_value = dist_matrix[threadID * k + 0];
     int min_id = 0;
     if (threadID < N)
     {
@@ -52,12 +70,11 @@ __global__ void argmin_cuda(const double*dist_matrix, int *alpha, int N, int k)
 }
 
 
-
-
-__device__ double calculate_dist_cuda(const double * vec_i, const double * vec_j, const double gamma_c, const double gamma_s)
+template<typename DType>
+__device__ DType calculate_dist_cuda(const DType * vec_i, const DType * vec_j, const DType gamma_c, const DType gamma_s)
 {
-    double spatial_dist = pow(vec_i[3] - vec_j[3], 2) + pow(vec_i[4] - vec_j[4], 2);      
-    double color_dist = pow(vec_i[0] - vec_j[0], 2) + pow(vec_i[1] - vec_j[1], 2) + pow(vec_i[2] - vec_j[2], 2);
+    DType spatial_dist = pow(vec_i[3] - vec_j[3], 2) + pow(vec_i[4] - vec_j[4], 2);      
+    DType color_dist = pow(vec_i[0] - vec_j[0], 2) + pow(vec_i[1] - vec_j[1], 2) + pow(vec_i[2] - vec_j[2], 2);
     spatial_dist = exp(-gamma_s * spatial_dist);
     color_dist =  exp(-gamma_c * color_dist);
     return spatial_dist * color_dist;
